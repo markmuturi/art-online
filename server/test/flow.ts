@@ -1,6 +1,7 @@
 import { createHmac } from "node:crypto";
+import { requireAdminUrl, resetDatabase } from "../scripts/db";
 
-process.env.DATABASE_URL = "postgres://postgres:pw@localhost/artonline";
+process.env.DATABASE_URL = await resetDatabase(requireAdminUrl(), "art_test_flow");
 process.env.PAYSTACK_SECRET_KEY = "sk_test_local";
 process.env.PLATFORM_FEE_BPS = "1000";
 

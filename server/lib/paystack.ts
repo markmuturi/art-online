@@ -70,3 +70,57 @@ export async function initiateTransfer(args: {
   });
   return { transferCode: data.transfer_code, status: data.status };
 }
+
+export interface CreateRecipientArgs {
+  type: "mobile_money" | "kepss";
+  accountName: string; // the name on the M-Pesa line or bank account, not the public artist name
+  accountNumber: string; // phone number for mobile_money, account number for kepss. Never persisted by us.
+  bankCode: string; // "MPESA" for M-Pesa wallets, or a Kenyan bank code from listBanks() for kepss
+}
+
+export interface Recipient {
+  recipientCode: string;
+  bankName: string;
+}
+
+// NOTE: Paystack's exact accepted phone number format for Kenya mobile_money (07XXXXXXXX vs
+// 2547XXXXXXXX vs +254...) was not confirmed against a live call while building this. Test
+// against the real sandbox before launch and adjust normalizePhone below if it rejects a format.
+export async function createTransferRecipient(args: CreateRecipientArgs): Promise<Recipient> {
+  const data = await paystackPost<{ recipient_code: string; bank_name: string }>("/transferrecipient", {
+    type: args.type,
+    name: args.accountName,
+    account_number: args.accountNumber,
+    bank_code: args.bankCode,
+    currency: "KES",
+  });
+  return { recipientCode: data.recipient_code, bankName: data.bank_name };
+}
+
+// Best-effort cleanup when an application is rejected. A failure here is not worth blocking
+// the rejection over, Paystack does not charge for unused recipients sitting idle.
+export async function deleteTransferRecipient(recipientCode: string): Promise<void> {
+  const res = await fetch(`${BASE_URL}/transferrecipient/${recipientCode}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${secretKey()}` },
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!res.ok) throw new Error(`Paystack recipient delete failed (${res.status})`);
+}
+
+export interface Bank {
+  name: string;
+  code: string;
+}
+
+// For populating a bank picker ahead of a kepss (Kenyan bank account) application.
+// Mobile money applicants don't need this, the bank_code is always the fixed "MPESA".
+export async function listBanks(): Promise<Bank[]> {
+  const res = await fetch(`${BASE_URL}/bank?country=kenya&currency=KES&type=kepss`, {
+    headers: { Authorization: `Bearer ${secretKey()}` },
+    signal: AbortSignal.timeout(15_000),
+  });
+  const json = (await res.json()) as PaystackEnvelope<Array<{ name: string; code: string }>>;
+  if (!res.ok || !json.status || !json.data) throw new Error(`Paystack bank list failed (${res.status}): ${json.message}`);
+  return json.data.map((b) => ({ name: b.name, code: b.code }));
+}

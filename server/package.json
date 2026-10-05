@@ -1,0 +1,24 @@
+{
+  "name": "art-online-backend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "db:check": "tsx scripts/check-db.ts",
+    "test:flow": "tsx test/flow.ts",
+    "test:auth": "tsx test/auth.test.ts",
+    "test:checkout": "tsx test/checkout.test.ts",
+    "test:artists": "tsx test/artists.test.ts",
+    "test": "npm run typecheck && npm run test:flow && npm run test:auth && npm run test:checkout && npm run test:artists"
+  },
+  "dependencies": {
+    "better-auth": "1.7.6",
+    "pg": "8.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.3",
+    "@types/pg": "8.23.1",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2"
+  }
+}

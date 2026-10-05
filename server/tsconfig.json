@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "types": ["node"],
+    "paths": { "@/*": ["./*"] }
+  },
+  "include": ["lib/**/*.ts", "app/**/*.ts", "worker/**/*.ts", "scripts/**/*.ts", "test/**/*.ts"]
+}
