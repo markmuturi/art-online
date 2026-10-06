@@ -5,12 +5,14 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "db:check": "tsx scripts/check-db.ts",
+    "storage:check": "tsx scripts/check-storage.ts",
     "test:flow": "tsx test/flow.ts",
     "test:auth": "tsx test/auth.test.ts",
     "test:checkout": "tsx test/checkout.test.ts",
     "test:artists": "tsx test/artists.test.ts",
     "test:uploads": "tsx test/uploads.test.ts",
-    "test": "npm run typecheck && npm run test:flow && npm run test:auth && npm run test:checkout && npm run test:artists && npm run test:uploads"
+    "test:artworks": "tsx test/artworks.test.ts",
+    "test": "npm run typecheck && npm run test:flow && npm run test:auth && npm run test:checkout && npm run test:artists && npm run test:uploads && npm run test:artworks"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1146.0",

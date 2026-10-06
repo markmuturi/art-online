@@ -44,3 +44,7 @@ export async function uploadPrivateObject(key: string, body: Buffer, contentType
 export async function getPrivateDownloadUrl(key: string, expiresInSeconds = 900): Promise<string> {
   return getSignedUrl(client(), new GetObjectCommand({ Bucket: requiredEnv("R2_PRIVATE_BUCKET"), Key: key }), { expiresIn: expiresInSeconds });
 }
+
+export async function deletePrivateObject(key: string): Promise<void> {
+  await client().send(new DeleteObjectCommand({ Bucket: requiredEnv("R2_PRIVATE_BUCKET"), Key: key }));
+}
