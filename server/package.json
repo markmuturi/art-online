@@ -5,7 +5,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "db:check": "tsx scripts/check-db.ts",
-    "storage:check": "tsx scripts/check-storage.ts",
+    "storage:check": "tsx --env-file=.env scripts/check-storage.ts",
     "test:flow": "tsx test/flow.ts",
     "test:auth": "tsx test/auth.test.ts",
     "test:checkout": "tsx test/checkout.test.ts",
