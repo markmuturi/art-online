@@ -10,5 +10,5 @@
     "types": ["node"],
     "paths": { "@/*": ["./*"] }
   },
-  "include": ["lib/**/*.ts", "app/**/*.ts", "worker/**/*.ts", "scripts/**/*.ts", "test/**/*.ts"]
+  "include": ["lib/**/*.ts", "app/**/*.ts", "worker/**/*.ts", "scripts/**/*.ts", "test/**/*.ts", "types/**/*.ts"]
 }

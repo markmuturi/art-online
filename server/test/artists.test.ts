@@ -135,7 +135,12 @@ check("unauthenticated cannot approve (401)", (await approve(buyerId, undefined)
 const queue = await adminList(adminCookie).then((r) => r.json());
 check("admin queue lists the pending mpesa application", queue.some((a: any) => a.userId === buyerId && a.kycStatus === "pending"), queue);
 
-// ---- admin approves
+// ---- approval is blocked with zero KYC documents on file
+const tooEarly = await approve(buyerId, adminCookie);
+check("approve fails with no KYC document uploaded (400)", tooEarly.status === 400 && (await tooEarly.text()).includes("KYC"), tooEarly.status);
+
+// ---- admin approves, now that a document exists
+await pool.query(`INSERT INTO kyc_documents (user_id, storage_key, file_type, file_size_bytes) VALUES ($1,'kyc/test/id.jpg','image/jpeg',1234)`, [buyerId]);
 const approveRes = await approve(buyerId, adminCookie);
 check("approve succeeds", approveRes.status === 200, approveRes.status);
 check("role flips to artist and kyc_status flips to verified, with a timestamp", (await one(`SELECT role FROM users WHERE id=$1`, [buyerId])).role === "artist" && (await one(`SELECT kyc_status, kyc_verified_at FROM artist_profiles WHERE user_id=$1`, [buyerId])).kyc_status === "verified");
