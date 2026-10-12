@@ -1,11 +1,64 @@
 import { withTransaction } from "@/lib/db";
 import { requireRole, errorResponse } from "@/lib/auth/session";
 import { createArtwork, ArtworkError, type FulfillmentType, type EditionType } from "@/lib/artworks";
+import { browseArtworks, type SortOption } from "@/lib/catalog";
 
 export const runtime = "nodejs";
 
 const MIN_PRICE_CENTS = 100; // KES 1.00
 const MAX_PRICE_CENTS = 500_000_00; // KES 500,000: a typo guard, not a real business ceiling
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const SORT_OPTIONS: SortOption[] = ["newest", "price_asc", "price_desc"];
+
+// Public, no auth. This is how a buyer actually finds something to check out with: every test
+// up to now seeded an artworkId directly, nothing before this could discover one.
+export async function GET(req: Request): Promise<Response> {
+  const sp = new URL(req.url).searchParams;
+
+  const sortRaw = sp.get("sort") ?? "newest";
+  if (!SORT_OPTIONS.includes(sortRaw as SortOption)) {
+    return new Response(`sort must be one of: ${SORT_OPTIONS.join(", ")}.`, { status: 400 });
+  }
+
+  let limit = 20;
+  const limitRaw = sp.get("limit");
+  if (limitRaw !== null) {
+    const n = Number(limitRaw);
+    if (!Number.isInteger(n) || n < 1 || n > 50) return new Response("limit must be an integer between 1 and 50.", { status: 400 });
+    limit = n;
+  }
+
+  let offset = 0;
+  const offsetRaw = sp.get("offset");
+  if (offsetRaw !== null) {
+    const n = Number(offsetRaw);
+    if (!Number.isInteger(n) || n < 0 || n > 10_000) return new Response("offset must be an integer between 0 and 10000.", { status: 400 });
+    offset = n;
+  }
+
+  const artistId = sp.get("artistId") ?? undefined;
+  if (artistId !== undefined && !UUID_RE.test(artistId)) return new Response("artistId must be a valid UUID.", { status: 400 });
+
+  const fulfillmentType = sp.get("fulfillmentType") ?? undefined;
+  if (fulfillmentType !== undefined && fulfillmentType !== "physical" && fulfillmentType !== "digital") {
+    return new Response("fulfillmentType must be 'physical' or 'digital'.", { status: 400 });
+  }
+
+  const result = await withTransaction((client) =>
+    browseArtworks(client, {
+      genreSlug: sp.get("genre") ?? undefined,
+      location: sp.get("location")?.trim().slice(0, 100) || undefined,
+      artistId,
+      fulfillmentType: fulfillmentType as "physical" | "digital" | undefined,
+      q: sp.get("q")?.trim().slice(0, 200) || undefined,
+      sort: sortRaw as SortOption,
+      limit,
+      offset,
+    }),
+  );
+  return Response.json(result);
+}
 
 interface CreateBody {
   title?: unknown;

@@ -13,12 +13,18 @@ npm run db:check
 npm test
 ```
 
-`npm test` runs, in order: a TypeScript check, then `test/flow.ts` (checkout, webhooks, the
-order state machine, the worker, payouts), then `test/auth.test.ts` (sign-up, email
-verification, sessions, rate limiting). Each test file drops and recreates its own
-throwaway database (`art_test_flow`, `art_test_auth`) before running, so re-running is
-always safe and never touches a database you care about. `scripts/db.ts` refuses to
-touch any database not named `art_test_*`.
+`npm test` runs, in order: a TypeScript check, then seven test files: `test/flow.ts` (checkout,
+webhooks, the order state machine, the worker, payouts), `auth.test.ts` (sign-up through
+sessions and rate limiting), `checkout.test.ts`, `artists.test.ts` (artist applications and
+admin approval), `uploads.test.ts` (artwork photos and KYC documents), `artworks.test.ts`
+(creating, publishing and archiving listings) and `catalog.test.ts` (public browse and search).
+Each test file drops and recreates its own throwaway database (`art_test_*`) before running, so
+re-running is always safe and never touches a database you care about. `scripts/db.ts` refuses
+to touch any database not named `art_test_*`. The storage tests use a local stand-in for
+Cloudflare R2, so `npm test` needs no cloud account.
+
+`npm run storage:check` is different: it talks to your REAL R2 buckets using the values in your
+`.env` file, and is the one command that proves your Cloudflare setup is correct.
 
 ## Troubleshooting
 
@@ -52,5 +58,5 @@ being on your PATH or not makes no difference here.
 ## What you should see
 
 `npm run db:check` prints a Postgres version line and `Extensions available: citext,
-pgcrypto`. `npm test` ends with `ALL PASSED` twice, once for each test file, with no
-`FAIL` lines above it.
+pgcrypto`. `npm test` ends with `ALL PASSED` seven times, once per test file, with no
+`FAIL` lines above any of them.

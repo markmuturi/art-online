@@ -71,8 +71,21 @@ export interface Viewer {
 // Draft and removed artworks are only visible to their owner or an admin. Everyone else gets
 // a 404-equivalent null, which is deliberate: an artist's unpublished work isn't even
 // confirmable to exist from the outside.
+//
+// a.* is safe to select wholesale: every artworks column is already meant to be shown to the
+// artwork's owner, an admin, or the public once listed. ap.* would NOT be safe in the same
+// query, because artist_profiles also holds payout and KYC fields, so only two specific columns
+// are pulled from it, the same restriction browseArtworks applies in lib/catalog.ts.
 export async function getArtwork(client: PoolClient, artworkId: string, viewer: Viewer | null) {
-  const { rows } = await client.query(`SELECT * FROM artworks WHERE id = $1`, [artworkId]);
+  const { rows } = await client.query(
+    `SELECT a.*, g.name AS genre_name, g.slug AS genre_slug,
+            ap.display_name AS artist_display_name, ap.location_city AS artist_location_city
+       FROM artworks a
+       JOIN genres g ON g.id = a.genre_id
+       JOIN artist_profiles ap ON ap.user_id = a.artist_id
+      WHERE a.id = $1`,
+    [artworkId],
+  );
   const art = rows[0];
   if (!art) return null;
 
@@ -84,7 +97,12 @@ export async function getArtwork(client: PoolClient, artworkId: string, viewer: 
     `SELECT id, url, position FROM artwork_images WHERE artwork_id = $1 ORDER BY position`,
     [artworkId],
   );
-  return { ...mapRow(art), images: images.rows };
+  return {
+    ...mapRow(art),
+    genre: { name: art.genre_name, slug: art.genre_slug },
+    artist: { displayName: art.artist_display_name, locationCity: art.artist_location_city },
+    images: images.rows,
+  };
 }
 
 export interface UpdateArtworkArgs {

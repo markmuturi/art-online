@@ -12,7 +12,8 @@
     "test:artists": "tsx test/artists.test.ts",
     "test:uploads": "tsx test/uploads.test.ts",
     "test:artworks": "tsx test/artworks.test.ts",
-    "test": "npm run typecheck && npm run test:flow && npm run test:auth && npm run test:checkout && npm run test:artists && npm run test:uploads && npm run test:artworks"
+    "test:catalog": "tsx test/catalog.test.ts",
+    "test": "npm run typecheck && npm run test:flow && npm run test:auth && npm run test:checkout && npm run test:artists && npm run test:uploads && npm run test:artworks && npm run test:catalog"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1146.0",
