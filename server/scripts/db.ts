@@ -1,11 +1,8 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { Client } from "pg";
+import { migrate } from "./migrate-lib";
 
-const MIGRATIONS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "migrations");
-
-// Drops and recreates a throwaway database, then applies every migration in filename order.
+// Drops and recreates a throwaway database, then builds it with the same migration runner
+// that `npm run db:migrate` uses, so every test run also exercises the runner.
 // The art_test_ prefix guard stops a typo from dropping a database you care about.
 export async function resetDatabase(adminUrl: string, dbName: string): Promise<string> {
   if (!/^art_test_[a-z0-9_]+$/.test(dbName)) {
@@ -23,20 +20,7 @@ export async function resetDatabase(adminUrl: string, dbName: string): Promise<s
 
   const url = new URL(adminUrl);
   url.pathname = `/${dbName}`;
-  const db = new Client({ connectionString: url.toString() });
-  await db.connect();
-  try {
-    const files = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith(".sql")).sort();
-    for (const file of files) {
-      try {
-        await db.query(readFileSync(join(MIGRATIONS_DIR, file), "utf8"));
-      } catch (err) {
-        throw new Error(`Migration ${file} failed: ${(err as Error).message}`);
-      }
-    }
-  } finally {
-    await db.end();
-  }
+  await migrate(url.toString());
   return url.toString();
 }
 
@@ -45,7 +29,9 @@ export function requireAdminUrl(): string {
   if (!url) {
     console.error(
       "TEST_DB_ADMIN_URL is not set. In Git Bash run:\n" +
-        "  export TEST_DB_ADMIN_URL='postgres://postgres:YOURPASSWORD@localhost:5432/postgres'",
+        "  export TEST_DB_ADMIN_URL='postgres://postgres:YOURPASSWORD@localhost:5432/postgres'\n" +
+        "In PowerShell run:\n" +
+        '  $env:TEST_DB_ADMIN_URL = "postgres://postgres:YOURPASSWORD@localhost:5432/postgres"',
     );
     process.exit(1);
   }

@@ -4,6 +4,14 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "worker": "tsx --env-file=.env worker/index.ts",
+    "db:migrate": "tsx --env-file=.env scripts/migrate.ts",
+    "db:setup": "tsx --env-file=.env scripts/migrate.ts --create-db",
+    "db:seed-demo": "tsx --env-file=.env scripts/seed-demo.ts",
+    "smoke": "tsx scripts/smoke-site.ts",
     "db:check": "tsx scripts/check-db.ts",
     "storage:check": "tsx --env-file=.env scripts/check-storage.ts",
     "test:flow": "tsx test/flow.ts",
@@ -13,18 +21,24 @@
     "test:uploads": "tsx test/uploads.test.ts",
     "test:artworks": "tsx test/artworks.test.ts",
     "test:catalog": "tsx test/catalog.test.ts",
-    "test": "npm run typecheck && npm run test:flow && npm run test:auth && npm run test:checkout && npm run test:artists && npm run test:uploads && npm run test:artworks && npm run test:catalog"
+    "test": "npm run typecheck && npm run test:flow && npm run test:auth && npm run test:checkout && npm run test:artists && npm run test:uploads && npm run test:artworks && npm run test:catalog && npm run test:migrate",
+    "test:migrate": "tsx test/migrate.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1146.0",
     "@aws-sdk/s3-request-presigner": "3.1146.0",
     "better-auth": "1.7.6",
+    "next": "16.4.2",
     "pg": "8.23.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
     "sharp": "0.35.5"
   },
   "devDependencies": {
     "@types/node": "26.6.3",
     "@types/pg": "8.23.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
     "s3rver": "3.7.1",
     "tsx": "4.23.15",
     "typescript": "7.0.2"

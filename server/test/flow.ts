@@ -44,7 +44,7 @@ const buyer1 = (await one<{ id: string }>(`INSERT INTO users (email, full_name) 
 const buyer2 = (await one<{ id: string }>(`INSERT INTO users (email, full_name) VALUES ('b2@x.ke','Buyer Two') RETURNING id`)).id;
 const artist = (await one<{ id: string }>(`INSERT INTO users (email, full_name, role) VALUES ('a@x.ke','Artist','artist') RETURNING id`)).id;
 await pool.query(`INSERT INTO artist_profiles (user_id, display_name, paystack_recipient_code, payout_channel) VALUES ($1,'The Artist','RCP_test','mpesa')`, [artist]);
-const genre = (await one<{ id: number }>(`INSERT INTO genres (name, slug) VALUES ('Painting','painting') RETURNING id`)).id;
+const genre = (await one<{ id: number }>(`SELECT id FROM genres WHERE slug='painting'`)).id;
 const addr1 = (await one<{ id: string }>(`INSERT INTO addresses (user_id, recipient_name, line1, city, phone) VALUES ($1,'B1','1 Rd','Nairobi','0700') RETURNING id`, [buyer1])).id;
 const addr2 = (await one<{ id: string }>(`INSERT INTO addresses (user_id, recipient_name, line1, city, phone) VALUES ($1,'B2','2 Rd','Nairobi','0711') RETURNING id`, [buyer2])).id;
 const mkPhys = async (t: string): Promise<string> =>

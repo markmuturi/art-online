@@ -83,7 +83,7 @@ const artistCookie = await signUpVerified("artist@x.ke", "10.3.1.1");
 const artistId = (await one(`SELECT id FROM users WHERE email='artist@x.ke'`)).id;
 await pool.query(`UPDATE users SET role='artist' WHERE id=$1`, [artistId]);
 await pool.query(`INSERT INTO artist_profiles (user_id, display_name) VALUES ($1,'Test Artist')`, [artistId]);
-const genre = (await one(`INSERT INTO genres (name, slug) VALUES ('Painting','painting') RETURNING id`)).id;
+const genre = (await one(`SELECT id FROM genres WHERE slug='painting'`)).id;
 const artworkId = (await one(`INSERT INTO artworks (artist_id,title,genre_id,price_cents,status,fulfillment_type) VALUES ($1,'Sunset',$2,500000,'listed','physical') RETURNING id`, [artistId, genre])).id;
 
 const otherArtistCookie = await signUpVerified("other-artist@x.ke", "10.3.1.2");

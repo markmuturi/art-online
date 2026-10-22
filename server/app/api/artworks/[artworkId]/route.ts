@@ -1,6 +1,7 @@
 import { withTransaction } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth/session";
 import { getArtwork, updateArtwork, ArtworkError } from "@/lib/artworks";
+import { isUuid } from "@/lib/ids";
 
 export const runtime = "nodejs";
 
@@ -9,6 +10,7 @@ export const runtime = "nodejs";
 export async function GET(req: Request, { params }: { params: Promise<{ artworkId: string }> }): Promise<Response> {
   const viewer = await getSessionUser(req.headers);
   const { artworkId } = await params;
+  if (!isUuid(artworkId)) return new Response("Not found.", { status: 404 });
   const art = await withTransaction((client) => getArtwork(client, artworkId, viewer));
   if (!art) return new Response("Not found.", { status: 404 });
   return Response.json(art);
@@ -25,6 +27,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ artwor
   const viewer = await getSessionUser(req.headers);
   if (!viewer) return new Response("Sign in required", { status: 401 });
   const { artworkId } = await params;
+  if (!isUuid(artworkId)) return new Response("Not found.", { status: 404 });
 
   let body: PatchBody;
   try {

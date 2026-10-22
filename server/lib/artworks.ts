@@ -1,4 +1,5 @@
 import type { PoolClient } from "pg";
+import { IS_AVAILABLE_SQL } from "./availability";
 
 export class ArtworkError extends Error {
   constructor(message: string) {
@@ -26,6 +27,9 @@ function mapRow(r: any) {
     editionsSold: r.editions_sold,
     primaryImageUrl: r.primary_image_url,
     createdAt: r.created_at,
+    // true only when the piece is listed AND a buyer could purchase it right now. A listed piece
+    // with available=false has sold (or is reserved by a buyer mid-checkout).
+    available: r.available as boolean,
   };
 }
 
@@ -59,7 +63,10 @@ export async function createArtwork(client: PoolClient, args: CreateArtworkArgs)
 }
 
 export async function listMyArtworks(client: PoolClient, artistId: string): Promise<ReturnType<typeof mapRow>[]> {
-  const { rows } = await client.query(`SELECT * FROM artworks WHERE artist_id = $1 ORDER BY created_at DESC`, [artistId]);
+  const { rows } = await client.query(
+    `SELECT a.*, ${IS_AVAILABLE_SQL} AS available FROM artworks a WHERE a.artist_id = $1 ORDER BY a.created_at DESC`,
+    [artistId],
+  );
   return rows.map(mapRow);
 }
 
@@ -78,7 +85,7 @@ export interface Viewer {
 // are pulled from it, the same restriction browseArtworks applies in lib/catalog.ts.
 export async function getArtwork(client: PoolClient, artworkId: string, viewer: Viewer | null) {
   const { rows } = await client.query(
-    `SELECT a.*, g.name AS genre_name, g.slug AS genre_slug,
+    `SELECT a.*, ${IS_AVAILABLE_SQL} AS available, g.name AS genre_name, g.slug AS genre_slug,
             ap.display_name AS artist_display_name, ap.location_city AS artist_location_city
        FROM artworks a
        JOIN genres g ON g.id = a.genre_id

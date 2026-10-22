@@ -45,12 +45,18 @@ export async function GET(req: Request): Promise<Response> {
     return new Response("fulfillmentType must be 'physical' or 'digital'.", { status: 400 });
   }
 
+  const includeSoldRaw = sp.get("includeSold");
+  if (includeSoldRaw !== null && includeSoldRaw !== "true" && includeSoldRaw !== "false") {
+    return new Response("includeSold must be 'true' or 'false'.", { status: 400 });
+  }
+
   const result = await withTransaction((client) =>
     browseArtworks(client, {
       genreSlug: sp.get("genre") ?? undefined,
       location: sp.get("location")?.trim().slice(0, 100) || undefined,
       artistId,
       fulfillmentType: fulfillmentType as "physical" | "digital" | undefined,
+      includeSold: includeSoldRaw === "true",
       q: sp.get("q")?.trim().slice(0, 200) || undefined,
       sort: sortRaw as SortOption,
       limit,

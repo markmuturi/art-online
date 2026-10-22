@@ -82,7 +82,7 @@ await pool.query(`UPDATE users SET role='artist' WHERE email='other@x.ke'`);
 
 const buyerCookie = await signUpVerified("buyer@x.ke", "10.4.1.3");
 
-const genre = (await one(`INSERT INTO genres (name, slug) VALUES ('Painting','painting') RETURNING id`)).id;
+const genre = (await one(`SELECT id FROM genres WHERE slug='painting'`)).id;
 const basePhysical = { title: "Sunset Over Nairobi", description: "Oil on canvas", genreId: genre, priceCents: 500000, fulfillmentType: "physical" };
 
 // ---- creation: auth and validation
@@ -124,6 +124,7 @@ check("nonexistent artwork is 404", (await getOne("00000000-0000-0000-0000-00000
 const mineList = await mine(artistCookie).then((r) => r.json());
 check("artist's own list includes all three drafts they created", mineList.length === 3 && mineList.every((a: any) => a.artistId === artistId), mineList.map((a: any) => a.title));
 check("a buyer cannot call the artist-only mine endpoint (403)", (await mine(buyerCookie)).status === 403);
+check("drafts report available=false in the artist's own list (not for sale yet)", mineList.every((a: any) => a.available === false), mineList.map((a: any) => a.available));
 
 // ---- patch
 check("a non-owner cannot patch (401 unauth, or ownership enforced as 400 not-found)", (await patch(j1.id, { priceCents: 600000 }, otherArtistCookie)).status === 400);
@@ -144,6 +145,7 @@ check("image upload for this artwork succeeds (reusing last session's route)", i
 const publishOk = await publish(j1.id, artistCookie);
 check("publish succeeds once a photo exists", publishOk.status === 200 && (await one(`SELECT status FROM artworks WHERE id=$1`, [j1.id])).status === "listed");
 check("a listed artwork is now visible to an anonymous viewer", (await getOne(j1.id, undefined)).status === 200);
+check("once listed and unsold, the artist's own list reports it available", (await mine(artistCookie).then((r) => r.json())).find((a: any) => a.id === j1.id)?.available === true);
 check("publishing an already-listed artwork is rejected (400)", (await publish(j1.id, artistCookie)).status === 400);
 check("editing a listed artwork is still allowed (status is in EDITABLE_STATUSES)", (await patch(j1.id, { title: "Sunset Over Nairobi, Final" }, artistCookie)).status === 200);
 

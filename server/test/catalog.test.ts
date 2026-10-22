@@ -3,6 +3,7 @@ import { requireAdminUrl, resetDatabase } from "../scripts/db";
 process.env.DATABASE_URL = await resetDatabase(requireAdminUrl(), "art_test_catalog");
 process.env.BETTER_AUTH_URL = "http://localhost:3000";
 process.env.BETTER_AUTH_SECRET = "test-secret-test-secret-test-secret-123456";
+process.env.PLATFORM_FEE_BPS = "1000";
 
 let failures = 0;
 const check = (name: string, ok: boolean, extra?: unknown): void => {
@@ -24,11 +25,11 @@ const titles = (j: any): string[] => j.items.map((i: any) => i.title);
 const sameSet = (a: string[], b: string[]): boolean => a.length === b.length && [...a].sort().join("|") === [...b].sort().join("|");
 
 // ---- seed: three genres, three artists in three cities, a mix of statuses
-const genre = async (name: string, slug: string): Promise<number> =>
-  (await one(`INSERT INTO genres (name, slug) VALUES ($1,$2) RETURNING id`, [name, slug])).id;
-const gPainting = await genre("Painting", "painting");
-const gSculpture = await genre("Sculpture", "sculpture");
-const gPhoto = await genre("Photography", "photography");
+// Genres come from migration 007, not from the test. If the seed is missing, these lookups fail.
+const genre = async (slug: string): Promise<number> => (await one(`SELECT id FROM genres WHERE slug = $1`, [slug])).id;
+const gPainting = await genre("painting");
+const gSculpture = await genre("sculpture");
+const gPhoto = await genre("photography");
 
 const artist = async (email: string, display: string, city: string | null): Promise<string> => {
   const id = (await one(`INSERT INTO users (email, full_name, role) VALUES ($1,$2,'artist') RETURNING id`, [email, display])).id;
@@ -131,7 +132,10 @@ check("fulfillmentType=nft -> 400", (await browse("?fulfillmentType=nft")).statu
 
 // ==== genres and locations
 const genres = await genresGET().then((r) => r.json());
-check("genres come back alphabetically", genres.map((g: any) => g.name).join() === "Painting,Photography,Sculpture", genres);
+const genreNames: string[] = genres.map((g: any) => g.name);
+check("a brand-new database already offers genres (seed migration), so a listing can be created with nobody inserting one", genreNames.length >= 8 && ["Painting", "Sculpture", "Photography", "Digital Art"].every((n) => genreNames.includes(n)), genreNames);
+check("genres come back alphabetically", genreNames.every((n, i) => i === 0 || genreNames[i - 1].slice(0, 2).toLowerCase() <= n.slice(0, 2).toLowerCase()), genreNames);
+check("every genre carries an id, name and url-safe slug", genres.every((g: any) => Number.isInteger(g.id) && g.name && /^[a-z0-9-]+$/.test(g.slug)), genres);
 const cities1 = await locationsGET().then((r) => r.json());
 check("locations list only cities with a listed artwork (Kisumu has just a draft)", cities1.join() === "Mombasa,Nairobi", cities1);
 await pool.query(`UPDATE artworks SET status='listed' WHERE id=$1`, [kisumuDraft]);
@@ -164,6 +168,86 @@ for (const sort of ["price_asc", "price_desc", "newest"]) {
   }
   check(`60 items sharing one price AND one timestamp, paged 7 at a time with sort=${sort}: every item exactly once`, seen.length === 60 && new Set(seen).size === 60, { got: seen.length, unique: new Set(seen).size });
 }
+
+// ==== availability: a piece nobody can buy stops being offered, and returns when it frees up
+const { withTransaction } = await import("../lib/db");
+const { createOrder } = await import("../lib/orders/create");
+const { transitionOrder } = await import("../lib/orders/transitions");
+
+const E = await artist("e@x.ke", "Eldoret Studio", "Eldoret");
+const buyer = (await one(`INSERT INTO users (email, full_name) VALUES ('buyer@x.ke','Buyer') RETURNING id`)).id;
+const addr = (await one(`INSERT INTO addresses (user_id, recipient_name, line1, city, phone) VALUES ($1,'B','1 Rd','Eldoret','0700') RETURNING id`, [buyer])).id;
+const landscape = await art(E, "Eldoret Landscape", gPainting, 400000, "listed", "physical");
+const run = (await one(
+  `INSERT INTO artworks (artist_id,title,genre_id,price_cents,status,fulfillment_type,edition_type,edition_size)
+   VALUES ($1,'Eldoret Print Run',$2,100000,'listed','digital','limited',2) RETURNING id`, [E, gPainting])).id;
+const eldoretPixel = await art(E, "Eldoret Pixel Original", gPainting, 150000, "listed", "digital"); // original, edition of 1
+
+const shown = (qs = ""): Promise<any> => browse(`?artistId=${E}${qs}`).then((r) => r.json());
+const buy = (artworkId: string, digital = false) =>
+  withTransaction((c) => createOrder(c, { buyerId: buyer, artworkId, shippingAddressId: digital ? null : addr }));
+const move = (orderId: string, to: any, actorType: any, extra: object = {}) =>
+  withTransaction((c) => transitionOrder(c, { orderId, to, actorType, ...extra }));
+const cities = (): Promise<string[]> => locationsGET().then((r) => r.json());
+const flag = (j: any, title: string) => j.items.find((i: any) => i.title === title)?.available;
+
+let v = await shown();
+check("starting point: all three Eldoret pieces are offered and available", v.totalCount === 3 && v.items.every((i: any) => i.available === true), titles(v));
+check("Eldoret is offered as a location", (await cities()).includes("Eldoret"));
+
+// -- physical piece, abandoned checkout
+const o1 = await buy(landscape);
+v = await shown();
+check("the moment a buyer starts checkout, the physical piece leaves the default catalog", !titles(v).includes("Eldoret Landscape") && v.totalCount === 2, titles(v));
+v = await shown("&includeSold=true");
+check("includeSold=true brings it back flagged available=false, the others still true", v.totalCount === 3 && flag(v, "Eldoret Landscape") === false && flag(v, "Eldoret Pixel Original") === true);
+const dSold = await detail(landscape);
+check("its detail page still loads (a shared link must not 404) and says available=false", dSold.status === 200 && (await dSold.json()).available === false);
+await move(o1.orderId, "cancelled", "system");
+check("an unpaid order that expires puts the piece straight back on sale", titles(await shown()).includes("Eldoret Landscape"));
+
+// -- physical piece, paid then refunded
+const o2 = await buy(landscape);
+await move(o2.orderId, "paid_held", "system");
+check("paid and held: still off the catalog", !titles(await shown()).includes("Eldoret Landscape"));
+await move(o2.orderId, "refunded", "admin");
+check("a refund puts the piece back on sale", titles(await shown()).includes("Eldoret Landscape"));
+
+// -- physical piece, sale completes
+const o3 = await buy(landscape);
+await move(o3.orderId, "paid_held", "system");
+await move(o3.orderId, "shipped", "artist", { trackingNumber: "TRK1" });
+await move(o3.orderId, "delivered_confirmed", "buyer");
+check("shipped and delivered: still off the catalog", !titles(await shown()).includes("Eldoret Landscape"));
+await move(o3.orderId, "released", "system");
+check("after payout (released) the piece stays off the catalog for good", !titles(await shown()).includes("Eldoret Landscape"));
+check("a completed sale is still reachable with includeSold, marked unavailable", flag(await shown("&includeSold=true"), "Eldoret Landscape") === false);
+
+// -- limited digital edition of 2
+await buy(run, true);
+check("edition of 2: after one sale one remains, still offered", titles(await shown()).includes("Eldoret Print Run"));
+const l2 = await buy(run, true);
+check("after the second sale the edition is sold out and leaves the catalog", !titles(await shown()).includes("Eldoret Print Run"));
+check("sold-out edition: detail still loads, says available=false", (await detail(run).then((r) => r.json())).available === false);
+await move(l2.orderId, "cancelled", "system");
+check("an abandoned edition purchase gives the edition back", titles(await shown()).includes("Eldoret Print Run"));
+
+// -- one-of-one digital original
+await buy(eldoretPixel, true);
+check("a one-of-one digital original leaves the catalog on its first order", !titles(await shown()).includes("Eldoret Pixel Original"));
+
+// -- state now: landscape sold, one print-run edition left, pixel reserved
+v = await shown();
+check("totalCount only counts what can be bought (1), includeSold counts all (3)", v.totalCount === 1 && (await shown("&includeSold=true")).totalCount === 3, { total: v.totalCount });
+check("Eldoret stays in the location filter while one edition remains", (await cities()).includes("Eldoret"));
+const l3 = await buy(run, true);
+check("a city drops out of the location filter once everything it has is sold or reserved", !(await cities()).includes("Eldoret"), await cities());
+await move(l3.orderId, "cancelled", "system");
+check("and returns when something frees up", (await cities()).includes("Eldoret"));
+
+// -- parameter handling
+check("includeSold=maybe is rejected (400)", (await browse("?includeSold=maybe")).status === 400);
+check("includeSold=false behaves like the default", (await shown("&includeSold=false")).totalCount === 1);
 
 console.log(failures === 0 ? "\nALL PASSED" : `\n${failures} FAILED`);
 await pool.end();

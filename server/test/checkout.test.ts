@@ -72,7 +72,7 @@ const one = async <T = any>(sql: string, p: unknown[] = []): Promise<T> => (awai
 // ---- seed catalogue
 const artist = (await one<{ id: string }>(`INSERT INTO users (email, full_name, role) VALUES ('artist@x.ke','Artist','artist') RETURNING id`)).id;
 await pool.query(`INSERT INTO artist_profiles (user_id, display_name, paystack_recipient_code, payout_channel) VALUES ($1,'The Artist','RCP_test','mpesa')`, [artist]);
-const genre = (await one<{ id: number }>(`INSERT INTO genres (name, slug) VALUES ('Painting','painting') RETURNING id`)).id;
+const genre = (await one<{ id: number }>(`SELECT id FROM genres WHERE slug='painting'`)).id;
 const physical = (await one<{ id: string }>(`INSERT INTO artworks (artist_id,title,genre_id,price_cents,status,fulfillment_type) VALUES ($1,'Sunset',$2,500000,'listed','physical') RETURNING id`, [artist, genre])).id;
 const digital = (await one<{ id: string }>(`INSERT INTO artworks (artist_id,title,genre_id,price_cents,status,fulfillment_type,edition_type,edition_size) VALUES ($1,'Pixel Sunset',$2,200000,'listed','digital','original',1) RETURNING id`, [artist, genre])).id;
 await pool.query(`INSERT INTO digital_assets (artwork_id, storage_key, file_type, file_size_bytes) VALUES ($1,'private/x.png','image/png',1234)`, [digital]);

@@ -1,4 +1,5 @@
 import type { PoolClient } from "pg";
+import { IS_AVAILABLE_SQL } from "./availability";
 
 export type SortOption = "newest" | "price_asc" | "price_desc";
 
@@ -7,6 +8,7 @@ export interface BrowseFilters {
   location?: string;
   artistId?: string;
   fulfillmentType?: "physical" | "digital";
+  includeSold?: boolean; // default false: pieces nobody can buy are left out
   q?: string;
   sort: SortOption;
   limit: number;
@@ -22,6 +24,7 @@ function mapCatalogRow(r: any) {
     fulfillmentType: r.fulfillment_type,
     primaryImageUrl: r.primary_image_url,
     createdAt: r.created_at,
+    available: r.available,
     genre: { name: r.genre_name, slug: r.genre_slug },
     artist: { id: r.artist_id, displayName: r.artist_display_name, locationCity: r.artist_location_city },
   };
@@ -42,6 +45,7 @@ const ORDER_BY: Record<SortOption, string> = {
 // LIMIT/OFFSET can then show one twice and skip another.
 export async function browseArtworks(client: PoolClient, filters: BrowseFilters) {
   const conditions: string[] = [`a.status = 'listed'`];
+  if (!filters.includeSold) conditions.push(IS_AVAILABLE_SQL);
   const params: unknown[] = [];
 
   if (filters.genreSlug) {
@@ -79,6 +83,7 @@ export async function browseArtworks(client: PoolClient, filters: BrowseFilters)
   // count(*) OVER() rides along in the same query instead of costing a second round trip.
   const { rows } = await client.query(
     `SELECT a.id, a.title, a.price_cents, a.currency, a.fulfillment_type, a.primary_image_url, a.created_at,
+            ${IS_AVAILABLE_SQL} AS available,
             g.name AS genre_name, g.slug AS genre_slug,
             ap.user_id AS artist_id, ap.display_name AS artist_display_name, ap.location_city AS artist_location_city,
             count(*) OVER() AS total_count
@@ -116,13 +121,13 @@ export async function listGenres(client: PoolClient): Promise<Array<{ id: number
   return rows;
 }
 
-// Only cities that currently have at least one LISTED artwork. A location filter that leads
-// to zero results is worse than not offering it at all.
+// Only cities that currently have at least one artwork a buyer can actually purchase. A location
+// filter that leads to zero results is worse than not offering it at all.
 export async function listLocations(client: PoolClient): Promise<string[]> {
   const { rows } = await client.query<{ city: string }>(
     `SELECT DISTINCT ap.location_city AS city
        FROM artist_profiles ap
-       JOIN artworks a ON a.artist_id = ap.user_id AND a.status = 'listed'
+       JOIN artworks a ON a.artist_id = ap.user_id AND a.status = 'listed' AND ${IS_AVAILABLE_SQL}
       WHERE ap.location_city IS NOT NULL
       ORDER BY city`,
   );
